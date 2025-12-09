@@ -1,0 +1,76 @@
+[gd_scene load_steps=2 format=3 uid="uid://bbtty32bxsue2"]
+
+[ext_resource type="Script" uid="uid://b06dmeuoal82r" path="res://addons/tag_system/scripts/main_screen_tag_manager.gd" id="1_tm2kp"]
+
+[node name="MainScreenTagManager" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_vertical = 3
+script = ExtResource("1_tm2kp")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/Title"]
+layout_mode = 2
+text = "Tag Manager"
+
+[node name="SearchBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 2
+
+[node name="SearchBox" type="LineEdit" parent="MarginContainer/VBoxContainer/SearchBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+placeholder_text = "Search tags..."
+
+[node name="InsertBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/InsertBar"]
+layout_mode = 2
+text = "Add Tag: "
+
+[node name="InsertBox" type="LineEdit" parent="MarginContainer/VBoxContainer/InsertBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+placeholder_text = "Parent.Child.SubChild"
+
+[node name="InsertButton" type="Button" parent="MarginContainer/VBoxContainer/InsertBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Insert"
+
+[node name="TagTree" type="Tree" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+columns = 3
+column_titles_visible = true
+allow_search = false
+hide_root = true
+select_mode = 1

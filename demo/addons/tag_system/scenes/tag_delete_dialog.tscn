@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://bi14lfnuqd1sp"]
+
+[node name="TagDeleteDialog" type="ConfirmationDialog"]
+oversampling_override = 1.0
+title = "Delete Tag"
+size = Vector2i(480, 120)
+visible = true
+popup_window = true
+ok_button_text = "Delete"

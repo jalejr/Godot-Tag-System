@@ -1,0 +1,4 @@
+[gd_resource type="TagDatabase" format=3 uid="uid://7l7fwpq3uktt"]
+
+[resource]
+tag_paths = PackedStringArray("Status", "Status.Buff", "Status.Buff.Strength", "Ability", "Ability.Attack", "Ability.Defend", "Ability.Attack.Melee")
