@@ -101,6 +101,8 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs: merge
+    permissions:
+      contents: write    # required to create GitHub Releases
     steps:
       - name: Checkout
         uses: actions/checkout@v4
