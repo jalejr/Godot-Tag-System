@@ -1,4 +1,5 @@
 #include "tag_manager.h"
+#include <vector>
 
 TagManager* TagManager::_singleton = nullptr;
 
@@ -168,6 +169,20 @@ PackedStringArray TagManager::get_parent_tags(const StringName& p_tag_name) cons
             result.push_back(String(get_tag_name(parent_idx)));
         }
     }
+    
+    return result;
+}
+
+std::vector<uint32_t> TagManager::get_parent_indices(uint32_t p_index) const
+{
+    std::vector<uint32_t> result;
+    
+    if (p_index == INVALID_INDEX) {
+        return result;
+    }
+    
+    auto it = _parent_map.find(p_index);
+    if (it != _parent_map.end()) result = it->second;
     
     return result;
 }

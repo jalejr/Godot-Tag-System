@@ -52,6 +52,7 @@ public:
     bool is_valid_tag(const StringName& p_tag_name) const;
     bool is_parent_of(uint32_t p_parent_index, uint32_t p_child_index) const;
     PackedStringArray get_parent_tags(const StringName& p_tag_name) const;
+    std::vector<uint32_t> get_parent_indices(uint32_t p_index) const;
 
     // Debugging purposes
     int32_t get_tag_count() const { return _tags.size(); }

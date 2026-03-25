@@ -1,4 +1,5 @@
 #include "tag_database.h"
+#include "godot_cpp/variant/string_name.hpp"
 #include "tag_manager.h"
 
 
@@ -130,7 +131,7 @@ void TagDatabase::register_with_manager() const
         ERR_PRINT("TagManager not initialized");
         return;
     }
-    
+
     mgr->register_tags_from_array(_tag_names);
     mgr->lock_registry();
 }
@@ -139,7 +140,6 @@ String TagDatabase::generate_gdscript_constants() const
 {
     String output = "# AUTO-GENERATED - DO NOT EDIT\n";
     output += "# Generated from TagDatabase\n";
-    output += "# Regenerate by clicking 'Generate Constants' in Tags editor\n\n";
     output += "class_name Tag\n\n";
     
     for (int i = 0; i < _tag_names.size(); i++) {

@@ -1,19 +1,23 @@
 #include "tag_container.h"
 #include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/classes/engine.hpp"
 #include "tag_manager.h"
 #include <cstdint>
-#include <vector>
 #include <algorithm>
 
 void TagContainer::_bind_methods()
 {
+    ClassDB::bind_method(D_METHOD("add_tags", "tags"), &TagContainer::add_tags);
+    ClassDB::bind_method(D_METHOD("remove_tags", "tags"), &TagContainer::remove_tags);
     ClassDB::bind_method(D_METHOD("add_tag", "tag_name", "count"), &TagContainer::add_tag, DEFVAL(1));
     ClassDB::bind_method(D_METHOD("remove_tag", "tag_name", "count"), &TagContainer::remove_tag, DEFVAL(1));
     ClassDB::bind_method(D_METHOD("clear"), &TagContainer::clear);
     
     ClassDB::bind_method(D_METHOD("has_tag", "tag_name", "is_exact"), &TagContainer::has_tag, DEFVAL(false));
-    ClassDB::bind_method(D_METHOD("has_all", "other", "is_exact"), &TagContainer::has_all, DEFVAL(false));
-    ClassDB::bind_method(D_METHOD("has_any", "other", "is_exact"), &TagContainer::has_any, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("has_all_tags", "tags", "is_exact"), &TagContainer::has_all_tags, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("has_any_tags", "tags", "is_exact"), &TagContainer::has_any_tags, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("has_all_in_container", "other", "is_exact"), &TagContainer::has_all_in_container, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("has_any_in_container", "other", "is_exact"), &TagContainer::has_any_in_container, DEFVAL(false));
     
     ClassDB::bind_method(D_METHOD("watch_tag", "tag_name", "callable"), &TagContainer::watch_tag);
     ClassDB::bind_method(D_METHOD("unwatch_tag", "tag_name", "callable"), &TagContainer::unwatch_tag);
@@ -26,66 +30,84 @@ void TagContainer::_bind_methods()
     ClassDB::bind_static_method("TagContainer", D_METHOD("deserialize", "bytes"), &TagContainer::deserialize);
 }
 
+void TagContainer::_notification(int p_what)
+{
+    if (p_what == NOTIFICATION_READY) _ready();
+}
+
+void TagContainer::_ready()
+{
+    _tag_manager = TagManager::get_singleton();
+    ERR_FAIL_NULL_MSG(_tag_manager, "TagContainer created before TagManager is ready. Something really wrong happened...");
+}
 
 bool TagContainer::add_tag(const StringName& p_tag_name, int32_t p_count)
 {
-    if (p_count <= 0) {
-        ERR_PRINT(vformat("Tag '%s' was added an invalid count", String(p_tag_name)));
-        return false;
-    }
-    
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) {
-        ERR_PRINT("TagManager not initialized");
-        return false;
-    }
-    
-    uint32_t index = mgr->get_tag_index(p_tag_name);
-    if (index != TagManager::INVALID_INDEX) {
-        _tag_to_count_map[index] += p_count;  // Creates entry if doesn't exist, adds to existing
-        int32_t count = _tag_to_count_map[index];
-        _notify_watchers(p_tag_name, count);
-        return true;
-    } else {
-        ERR_PRINT(vformat("Tag '%s' not registered in TagManager", String(p_tag_name)));
+    ERR_FAIL_COND_V_MSG(p_count <= 0, false, vformat("Tag '%s' added with invalid count.", String(p_tag_name)));
+
+    uint32_t index;
+    if(!_resolve_index(p_tag_name, index)) return false;
+
+    _tag_to_count_map[index] += p_count;
+
+    if (_tag_to_count_map[index] == p_count) {
+        std::vector<uint32_t> parents = _tag_manager->get_parent_indices(index);
+        for (uint32_t parent_idx : parents) {
+            _ancestor_to_count[parent_idx]++;
+        }
     }
 
-    return false;
+    _watcher.notify(p_tag_name, _tag_to_count_map[index], _tag_manager);
+
+    return true;
+}
+
+void TagContainer::add_tags(const TypedArray<StringName>& p_tags)
+{
+    for (int i = 0; i < p_tags.size(); i++) {
+        StringName tag = p_tags[i];
+        if (tag != StringName()) add_tag(tag);
+    }
 }
 
 bool TagContainer::remove_tag(const StringName& p_tag_name, int32_t p_count)
 {
-    if (p_count <= 0) {
-        ERR_PRINT(vformat("Tag '%s' was removed an invalid count", String(p_tag_name)));
-        return false;
-    }
-    
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) {
-        ERR_PRINT("TagManager not initialized");
-        return false;
-    }
-    
-    uint32_t index = mgr->get_tag_index(p_tag_name);
-    if (index == TagManager::INVALID_INDEX) {
-        return false;
-    }
-    
-    auto it = _tag_to_count_map.find(index);
-    if (it == _tag_to_count_map.end()) {
-        return false;  // Tag not present
-    }
-    
-    // Decrease count, remove if reaches 0
-    it->second -= p_count;
+    ERR_FAIL_COND_V_MSG(p_count <= 0, false, vformat("Tag '%s' removed with invalid count.", String(p_tag_name)));
 
-    _notify_watchers(p_tag_name, std::max(0, it->second));
+    uint32_t index;
+    if (!_resolve_index(p_tag_name, index)) return false;
+
+    auto it = _tag_to_count_map.find(index);
+    if (it == _tag_to_count_map.end()) return false;
+
+    it->second -= p_count;
+    _watcher.notify(p_tag_name, std::max(0, it->second), _tag_manager);
 
     if (it->second <= 0) {
         _tag_to_count_map.erase(it);
+
+        std::vector<uint32_t> parents = _tag_manager->get_parent_indices(index);
+        for (uint32_t parent_idx : parents) {
+            auto parent_it = _ancestor_to_count.find(parent_idx);
+            if (parent_it == _ancestor_to_count.end()) continue;
+
+            parent_it->second--;
+
+            if(parent_it->second <= 0) {
+                _ancestor_to_count.erase(parent_idx);
+            }
+        }
     }
 
     return true;
+}
+
+void TagContainer::remove_tags(const TypedArray<StringName>& p_tags)
+{
+    for (int i = 0; i < p_tags.size(); i++) {
+        StringName tag = p_tags[i];
+        if (tag != StringName()) remove_tag(tag);
+    }
 }
 
 void TagContainer::clear()
@@ -95,147 +117,79 @@ void TagContainer::clear()
 
 bool TagContainer::has_tag(const StringName& p_tag_name, bool p_is_exact) const
 {
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return false;
-    
-    uint32_t query_idx = mgr->get_tag_index(p_tag_name);
-    if (query_idx == TagManager::INVALID_INDEX) {
-        return false;
-    }
-    
-    // Check exact match first - count > 0
-    auto it = _tag_to_count_map.find(query_idx);
-    if (it != _tag_to_count_map.end() && it->second > 0) {
-        return true;
-    }
+    uint32_t query_idx;
+    if (!_resolve_index(p_tag_name, query_idx)) return false;
 
-    if (p_is_exact) {
-        return false;
-    }
-    
-    // Check hierarchical match - is query a parent of any explicit tag?
-    for (const auto& [tag_idx, count] : _tag_to_count_map) {
-        if (count > 0 && mgr->is_parent_of(query_idx, tag_idx)) {
-            return true;
-        }
-    }
-    
-    return false;
+    return _has_tag_by_index(query_idx, p_is_exact);
 }
 
-bool TagContainer::has_all(const Ref<TagContainer>& p_other, bool p_is_exact) const
+bool TagContainer::has_all_tags(const TypedArray<StringName>& p_tags, bool p_is_exact) const
 {
-    if (!p_other.is_valid() || p_other->get_num_tags() == 0) {
-        return true;
-    }
-    
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return false;
-    
-    for (const auto& [query_idx, _] : p_other->_tag_to_count_map) {
-        // Check exact match
-        auto it = _tag_to_count_map.find(query_idx);
-        if (it != _tag_to_count_map.end() && it->second > 0) {
-            continue;
-        }
+    if (p_tags.is_empty()) return true;
 
-        if (p_is_exact) {
-            return false;
-        }
-        
-        // Check hierarchical match
-        bool found = false;
-        for (const auto& [tag_idx, count] : _tag_to_count_map) {
-            if (count > 0 && mgr->is_parent_of(query_idx, tag_idx)) {
-                found = true;
-                break;
-            }
-        }
-        
-        if (!found) {
-            return false;
-        }
+    for (int i = 0; i < p_tags.size(); i++) {
+        uint32_t query_idx;
+        if (!_resolve_index(StringName(p_tags[i]), query_idx)) return false;
+
+        if (!_has_tag_by_index(query_idx, p_is_exact)) return false;
     }
-    
+
     return true;
 }
 
-bool TagContainer::has_any(const Ref<TagContainer>& p_other, bool p_is_exact) const
+bool TagContainer::has_any_tags(const TypedArray<StringName>& p_tags, bool p_is_exact) const
 {
-    if (!p_other.is_valid() || p_other->get_num_tags() == 0) {
-        return false;
+    if (p_tags.is_empty()) return false;
+
+    for (int i = 0; i < p_tags.size(); i++) {
+        uint32_t query_idx;
+        if (!_resolve_index(StringName(p_tags[i]), query_idx)) continue;
+
+        if (_has_tag_by_index(query_idx, p_is_exact)) return true;
     }
-    
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return false;
-    
+
+    return false;
+}
+
+bool TagContainer::has_all_in_container(TagContainer* p_other, bool p_is_exact) const
+{
+    if (!p_other || p_other->get_num_tags() == 0) return true;
+
     for (const auto& [query_idx, _] : p_other->_tag_to_count_map) {
-        // Check exact match
-        auto it = _tag_to_count_map.find(query_idx);
-        if (it != _tag_to_count_map.end() && it->second > 0) {
-            return true;  // Early exit on match
-        }
-        
-        if (p_is_exact) {
-            continue;
-        }
-        
-        // Check hierarchical
-        for (const auto& [tag_idx, count] : _tag_to_count_map) {
-            if (count > 0 && mgr->is_parent_of(query_idx, tag_idx)) {
-                return true;  // Early exit on match
-            }
-        }
+        if (!_has_tag_by_index(query_idx, p_is_exact)) return false;
     }
-    
+
+    return true;
+}
+
+bool TagContainer::has_any_in_container(TagContainer* p_other, bool p_is_exact) const
+{
+    if (!p_other || p_other->get_num_tags() == 0) return false;
+
+    for (const auto& [query_idx, _] : p_other->_tag_to_count_map) {
+        if (_has_tag_by_index(query_idx, p_is_exact)) return true;
+    }
+
     return false;
 }
 
 int32_t TagContainer::get_tag_count(const StringName& p_tag_name) const
 {
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return 0;
-    
-    uint32_t index = mgr->get_tag_index(p_tag_name);
-    if (index == TagManager::INVALID_INDEX) {
-        return 0;
-    }
-    
+    uint32_t index;
+    if (!_resolve_index(p_tag_name, index)) return 0;
+
     auto it = _tag_to_count_map.find(index);
     return (it != _tag_to_count_map.end()) ? it->second : 0;
 }
 
 void TagContainer::watch_tag(const StringName& p_tag_name, const Callable& p_callback)
 {
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return;
-
-    uint32_t tag_index = mgr->get_tag_index(p_tag_name);
-    std::vector<Callable>& callbacks = _tag_to_callable_map[tag_index];
-
-    _tag_to_callable_map[tag_index].push_back(p_callback);
+    _watcher.watch(p_tag_name, p_callback, _tag_manager);
 }
 
 void TagContainer::unwatch_tag(const StringName& p_tag_name, const Callable& p_callback)
 {
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return;
-
-    uint32_t tag_index = mgr->get_tag_index(p_tag_name);
-    
-    auto it = _tag_to_callable_map.find(tag_index);
-    if (it != _tag_to_callable_map.end()) {
-        std::vector<Callable>& callbacks = it->second;
-        
-        callbacks.erase(
-            std::remove(callbacks.begin(), callbacks.end(), p_callback),
-            callbacks.end()
-        );
-        
-        if (callbacks.empty()) {
-            _tag_to_callable_map.erase(it);
-        }
-    }
+    _watcher.unwatch(p_tag_name, p_callback, _tag_manager);
 }
 
 PackedByteArray TagContainer::serialize() const
@@ -245,23 +199,21 @@ PackedByteArray TagContainer::serialize() const
     bytes.resize(4);
     bytes.encode_u32(0, _tag_to_count_map.size());
     
-    for (const auto &pair : _tag_to_count_map) {
+    for (const auto& [index, count] : _tag_to_count_map) {
         int offset = bytes.size();
         bytes.resize(offset + 8);
-        bytes.encode_u32(offset, pair.first);
-        bytes.encode_s32(offset + 4, pair.second);
+        bytes.encode_u32(offset, index);
+        bytes.encode_s32(offset + 4, count);
     }
     
     return bytes;
 }
 
-Ref<TagContainer> TagContainer::deserialize(const PackedByteArray& p_bytes)
+TagContainer* TagContainer::deserialize(const PackedByteArray& p_bytes)
 {
-    Ref<TagContainer> container = memnew(TagContainer);
+    TagContainer* container = memnew(TagContainer);
     
-    if (p_bytes.size() < 4) {
-        return container;
-    }
+    if (p_bytes.size() < 4) { return container; }
     
     uint32_t count = p_bytes.decode_u32(0);
     int offset = 4;
@@ -282,138 +234,34 @@ Ref<TagContainer> TagContainer::deserialize(const PackedByteArray& p_bytes)
 PackedStringArray TagContainer::get_tag_names() const
 {
     PackedStringArray result;
-    TagManager* mgr = TagManager::get_singleton();
-    if (!mgr) return result;
     
     for (const auto& [index, count] : _tag_to_count_map) {
         if (count > 0) {
-            result.push_back(String(mgr->get_tag_name(index)));
+            result.push_back(String(_tag_manager->get_tag_name(index)));
         }
     }
     
     return result;
 }
 
-void TagContainer::_get_property_list(List<PropertyInfo> *p_list) const
+bool TagContainer::_resolve_index(const StringName& p_tag_name, uint32_t& r_index) const
 {
-    p_list->push_back(PropertyInfo(
-        Variant::DICTIONARY,
-        "_tag_to_count_map",
-        PROPERTY_HINT_NONE,
-        "_tag_to_count",
-        PROPERTY_USAGE_STORAGE
-    ));
-    p_list->push_back(PropertyInfo(
-        Variant::DICTIONARY,
-        "_tag_to_callable_map",
-        PROPERTY_HINT_NONE,
-        "_tag_to_callable",
-        PROPERTY_USAGE_NONE
-    ));
+    r_index = _tag_manager->get_tag_index(p_tag_name);
+
+    if (r_index == TagManager::INVALID_INDEX) {
+        ERR_PRINT(vformat("Tag '%s' not registered in TagManager", String(p_tag_name)));
+        return false;
+    }
+
+    return true;
 }
 
-bool TagContainer::_get(const StringName &p_name, Variant &r_ret) const
+bool TagContainer::_has_tag_by_index(uint32_t p_query_idx, bool p_is_exact) const
 {
-    if (p_name == StringName("_tag_to_count_map")) {
-        Dictionary dict;
+    auto it = _tag_to_count_map.find(p_query_idx);
+    if (it != _tag_to_count_map.end() && it->second > 0) return true;
 
-        for (const auto &tag_to_count : _tag_to_count_map) {
-            dict[tag_to_count.first] = tag_to_count.second;
-        }
+    if (p_is_exact) return false;
 
-        r_ret = dict;
-        return true;
-    }
-    else if (p_name == StringName("_tag_to_callable_map")) {
-        Dictionary dict;
-
-        for (const auto &tag_to_callable : _tag_to_callable_map) {
-            Array callable_array;
-            for(const Callable &callable : tag_to_callable.second) {
-                callable_array.push_back(callable);
-            }
-            dict[tag_to_callable.first] = callable_array;
-        }
-
-        r_ret = dict;
-        return true;
-    }
-
-    return false;
-}
-
-bool TagContainer::_set(const StringName &p_name, const Variant &p_value)
-{
-    if (p_name == StringName("_tag_to_count_map")) {
-        _tag_to_count_map.clear();
-
-        Dictionary dict = p_value;
-        Array keys = dict.keys();
-
-        for (int i = 0; i < keys.size(); i++) {
-            uint32_t key = keys[i];
-            _tag_to_count_map[key] = dict[key];
-        }
-
-        return true;
-    }
-    else if (p_name == StringName("_tag_to_callable_map")) {
-        _tag_to_callable_map.clear();
-
-        Dictionary dict = p_value;
-        Array keys = dict.keys();
-
-        for (int i = 0; i < keys.size(); i++) {
-            uint32_t key = keys[i];
-            Array callable_array = dict[key];
-            std::vector<Callable> callbacks;
-
-            for (int j = 0; j < callable_array.size(); j++) {
-                callbacks.push_back(callable_array[j]);
-            }
-
-            _tag_to_callable_map[key] = callbacks;
-        }
-
-        return true;
-    }
-
-    return false;
-}
-
-void TagContainer::_notify_watchers(const StringName& p_tag_name, int32_t p_count) {
-    TagManager* mgr = TagManager::get_singleton();
-    if(!mgr) return;
-    PackedStringArray parents = mgr->get_parent_tags(p_tag_name);
-
-    _notify_watcher(p_tag_name, p_tag_name, p_count); // call on exact
-    
-    for (int i = 0; i < parents.size(); i++) {
-        _notify_watcher(parents[i], p_tag_name, p_count);
-    }
-}
-
-void TagContainer::_notify_watcher(const StringName& p_tag_notified, const StringName& p_tag_changed, int32_t p_count) {
-    TagManager* mgr = TagManager::get_singleton();
-    if(!mgr) return;
-
-    uint32_t notified_index = mgr->get_tag_index(p_tag_notified);
-
-    auto it = _tag_to_callable_map.find(notified_index);
-    if (it != _tag_to_callable_map.end()) {
-        std::vector<Callable>& callbacks = it->second;
-        size_t write_index = 0;
-
-        for (size_t read_index = 0; read_index < callbacks.size(); read_index++) {
-            if(callbacks[read_index].is_valid()) {
-                callbacks[read_index].call(Variant(StringName(p_tag_changed)), Variant(int32_t(p_count)));
-                if(write_index != read_index) {
-                    callbacks[write_index] = callbacks[read_index];
-                }
-                write_index++;
-            }
-        }
-
-        callbacks.resize(write_index); // lazy removal of invalid callbacks
-    }
+    return _ancestor_to_count.find(p_query_idx) != _ancestor_to_count.end();
 }

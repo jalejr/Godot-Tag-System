@@ -114,12 +114,6 @@ jobs:
           name: tag_system_bins
           path: demo/addons/tag_system/bin/
 
-      # Copy the gdextension file into the addon folder alongside bin/
-      # Note: filename uses hyphen (tag-system) not underscore
-      - name: Copy gdextension file
-        run: |
-          cp demo/bin/tag-system.gdextension demo/addons/tag_system/tag-system.gdextension
-
       # Zip the addon folder — excludes include/ since C++ headers
       # are not needed by end users of the GDExtension plugin
       - name: Create addon zip

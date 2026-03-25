@@ -2,6 +2,7 @@
 extends EditorPlugin
 
 var main_screen: Control
+var _inspector_plugin: TagInspectorPlugin
 var needs_generation: bool = false
 
 const MAIN_SCREEN_TAG_MANAGER = preload("uid://bbtty32bxsue2")
@@ -14,6 +15,9 @@ func _enter_tree() -> void:
 
 	EditorInterface.get_editor_main_screen().add_child(main_screen)
 	_make_visible(false)
+	
+	_inspector_plugin = TagInspectorPlugin.new()
+	add_inspector_plugin(_inspector_plugin)
 
 
 func _exit_tree():
@@ -26,6 +30,8 @@ func _exit_tree():
 			needs_generation = false
 		
 		main_screen.queue_free()
+	
+	remove_inspector_plugin(_inspector_plugin)
 
 
 func _has_main_screen():

@@ -8,15 +8,19 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
 config/name="Tag System Demo"
-config/features=PackedStringArray("4.5", "Forward Plus")
+config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
-TagSystem="*res://addons/tag_system/scripts/tag_system_autoload.gd"
+TagSystem="*uid://ca2usx0cvg1m3"
 
 [dotnet]
 

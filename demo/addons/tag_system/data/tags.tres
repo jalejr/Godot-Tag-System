@@ -1,4 +1,4 @@
 [gd_resource type="TagDatabase" format=3 uid="uid://7l7fwpq3uktt"]
 
 [resource]
-tag_paths = PackedStringArray("Status", "Status.Buff", "Status.Buff.Strength", "Ability", "Ability.Attack", "Ability.Defend", "Ability.Attack.Melee")
+tag_paths = PackedStringArray("Status", "Status.Buff", "Status.Buff.Strength", "Ability", "Ability.Attack", "Ability.Defend", "Ability.Attack.Melee", "Ability.Attack.Range", "Status.Buff.Gorbin", "Attribute", "Attribute.Health", "Attribute.MaxHealth", "Attribute.Vitality", "Attribute.Level", "Attribute.Strength", "Effect", "Effect.Initial", "Effect.Initial.Scaling", "Effect.Damage", "Effect.Heal", "Effect.Poison", "Effect.Buff", "Attribute.Test", "Test", "Test.1", "Test.2", "Test.3", "Test.4")

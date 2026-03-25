@@ -1,11 +1,14 @@
 extends Node
 
+@onready var container: TagContainer = $TagContainer
+@onready var container2: TagContainer = $TagContainer2
+@onready var dup_container: TagContainer = $TagContainer3
+
 func _ready() -> void:
 	print("\n=== Tag System Test ===")
 	print("Total tags registered: ", TagManager.get_tag_count())
 	print("All tags: ", TagManager.get_all_tag_names())
 
-	var container = TagContainer.new()
 	container.add_tag(Tag.ABILITY_ATTACK_MELEE)
 
 	print("\nContainer tests:")
@@ -22,14 +25,13 @@ func _ready() -> void:
 	print("\nStack test:")
 	print("  Strength stacks: ", container.get_tag_count(Tag.STATUS_BUFF_STRENGTH))  # Should be 5
 	
-	var container2 = TagContainer.new()
 	container2.add_tag(Tag.ABILITY_ATTACK)
 	container2.add_tag(Tag.ABILITY)
 	print("\nContainer comparison checks:")
-	print("  Has all 'Ability.Attack': ", container.has_all(container2))  # Should be true
-	print("  Has any 'Ability.Attack': ", container.has_any(container2))  # Should be true
-	print("  Has all 'Ability.Attack' exact: ", container.has_all(container2, true))  # Should be false
-	print("  Has any 'Ability.Attack' exact: ", container.has_any(container2, true))  # Should be true
+	print("  Has all 'Ability.Attack': ", container.has_all_in_container(container2))  # Should be true
+	print("  Has any 'Ability.Attack': ", container.has_any_in_container(container2))  # Should be true
+	print("  Has all 'Ability.Attack' exact: ", container.has_all_in_container(container2, true))  # Should be false
+	print("  Has any 'Ability.Attack' exact: ", container.has_any_in_container(container2, true))  # Should be true
 	
 	print("\nContainer watch checks:")
 	container.watch_tag(Tag.STATUS, _test)
@@ -53,7 +55,7 @@ func _ready() -> void:
 	
 	print("\nContainer duplicate checks:")
 	print("  Has tags: ", container.get_tag_names())
-	var dup_container = container.duplicate()
+	dup_container.add_tags(container.get_tag_names())
 	print("  Has tags: ", dup_container.get_tag_names())
 	dup_container.add_tag(Tag.STATUS_BUFF)
 	
@@ -62,6 +64,7 @@ func _ready() -> void:
 	var bytes = container.serialize()
 	print("  Serialized: ", bytes)
 	var container_deserialized = TagContainer.deserialize(bytes)
+	add_child(container_deserialized)
 	print("  Deserialized: ", container_deserialized.get_tag_names())
 	print("\n=== Test Complete ===\n")
 

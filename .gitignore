@@ -62,3 +62,5 @@ compile_commands.json
 cmake-build*
 CMakeUserPresets.json
 *.idx
+
+*.dll

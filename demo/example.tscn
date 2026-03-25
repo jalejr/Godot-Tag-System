@@ -1,6 +1,12 @@
-[gd_scene load_steps=2 format=3 uid="uid://dh0oj81pufivs"]
+[gd_scene format=3 uid="uid://dh0oj81pufivs"]
 
 [ext_resource type="Script" uid="uid://bkwk40ybs8kgm" path="res://example.gd" id="1_jdh55"]
 
-[node name="Example" type="Node"]
+[node name="Example" type="Node" unique_id=965079271]
 script = ExtResource("1_jdh55")
+
+[node name="TagContainer" type="TagContainer" parent="." unique_id=860119594]
+
+[node name="TagContainer2" type="TagContainer" parent="." unique_id=2122890885]
+
+[node name="TagContainer3" type="TagContainer" parent="." unique_id=1525513005]

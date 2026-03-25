@@ -1,7 +1,5 @@
 # AUTO-GENERATED - DO NOT EDIT
 # Generated from TagDatabase
-# Regenerate by clicking 'Generate Constants' in Tags editor
-
 class_name Tag
 
 const STATUS = "Status"
@@ -11,3 +9,24 @@ const ABILITY = "Ability"
 const ABILITY_ATTACK = "Ability.Attack"
 const ABILITY_DEFEND = "Ability.Defend"
 const ABILITY_ATTACK_MELEE = "Ability.Attack.Melee"
+const ABILITY_ATTACK_RANGE = "Ability.Attack.Range"
+const STATUS_BUFF_GORBIN = "Status.Buff.Gorbin"
+const ATTRIBUTE = "Attribute"
+const ATTRIBUTE_HEALTH = "Attribute.Health"
+const ATTRIBUTE_MAXHEALTH = "Attribute.MaxHealth"
+const ATTRIBUTE_VITALITY = "Attribute.Vitality"
+const ATTRIBUTE_LEVEL = "Attribute.Level"
+const ATTRIBUTE_STRENGTH = "Attribute.Strength"
+const EFFECT = "Effect"
+const EFFECT_INITIAL = "Effect.Initial"
+const EFFECT_INITIAL_SCALING = "Effect.Initial.Scaling"
+const EFFECT_DAMAGE = "Effect.Damage"
+const EFFECT_HEAL = "Effect.Heal"
+const EFFECT_POISON = "Effect.Poison"
+const EFFECT_BUFF = "Effect.Buff"
+const ATTRIBUTE_TEST = "Attribute.Test"
+const TEST = "Test"
+const TEST_1 = "Test.1"
+const TEST_2 = "Test.2"
+const TEST_3 = "Test.3"
+const TEST_4 = "Test.4"

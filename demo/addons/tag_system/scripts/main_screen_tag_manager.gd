@@ -2,6 +2,7 @@
 extends Control
 
 signal tag_changed
+signal tag_selected(tag_path: String)
 
 const TAG_EDIT_DIALOG = preload("uid://bp3n14bgad0js")
 const TAG_DELETE_DIALOG = preload("uid://bi14lfnuqd1sp")
@@ -10,8 +11,6 @@ const TAG_DELETE_DIALOG = preload("uid://bi14lfnuqd1sp")
 @onready var insert_box: LineEdit = %InsertBox
 @onready var insert_button: Button = %InsertButton
 @onready var tag_tree: Tree = %TagTree
-
-
 
 var database: TagDatabase
 var database_path: String = "res://addons/tag_system/data/tags.tres"
@@ -40,6 +39,7 @@ func _ready():
 	tag_tree.set_column_custom_minimum_width(1, 16)
 	tag_tree.set_column_custom_minimum_width(2, 16)
 	
+	tag_tree.item_selected.connect(_on_item_selected)
 	tag_tree.button_clicked.connect(_on_tree_button_clicked)
 	
 	load_database()
@@ -72,13 +72,48 @@ func refresh_tree(filter: String = ""):
 	var displayed_tags = {}
 	
 	for tag in all_tags:
-		if filter.is_empty() or tag.to_lower().contains(filter.to_lower()):
+		if filter.is_empty() or _tag_matches_filter(tag, filter):
 			displayed_tags[tag] = true
+			
+			var parts = tag.split(".")
+			
+			for i in range(1, parts.size()):
+				var ancestor = ".".join(parts.slice(0, i))
+				displayed_tags[ancestor] = true
 	
 	var root_tags = database.get_root_tags()
 	for tag in root_tags:
 		if tag in displayed_tags:
 			_add_tag_recursive(root, tag, displayed_tags)
+
+
+func generate_constants():
+	if not database:
+		return
+	
+	var gdscript_content = database.generate_gdscript_constants()
+	var file = FileAccess.open("res://addons/tag_system/tags.gd", FileAccess.WRITE)
+	if file:
+		file.store_string(gdscript_content)
+		file.close()
+	
+	var cpp_content = database.generate_cpp_header()
+	file = FileAccess.open("res://addons/tag_system/tags.h", FileAccess.WRITE)
+	if file:
+		file.store_string(cpp_content)
+		file.close()
+	
+	EditorInterface.get_resource_filesystem().scan()
+
+
+func _tag_matches_filter(tag: String, filter: String) -> bool:
+	var lower_filter = filter.to_lower()
+	
+	for segment in tag.split("."):
+		if segment.to_lower().contains(lower_filter):
+			return true
+	
+	return false
 
 
 func _add_tag_recursive(parent: TreeItem, tag_path: String, filter_dict: Dictionary):
@@ -113,6 +148,15 @@ func _add_tag_recursive(parent: TreeItem, tag_path: String, filter_dict: Diction
 	for child in children:
 		if child in filter_dict:
 			_add_tag_recursive(item, child, filter_dict)
+
+
+func _on_item_selected():
+	var item = tag_tree.get_selected()
+	
+	if not item : return
+	
+	var tag_path = item.get_metadata(0) as String
+	tag_selected.emit(tag_path)
 
 
 func _on_tree_button_clicked(item: TreeItem, _column: int, id: int, mouse_button_index: int):
