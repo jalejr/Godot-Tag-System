@@ -1,18 +1,19 @@
 # For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
 # This workflow is triggered manually on the "Actions" tab on GitHub, and can be used to create releases.
+# It also triggers automatically when a version tag is pushed (e.g. v1.0.0).
 
 name: Make a GDExtension build for all supported platforms
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        # A build is made for every possible combination of parameters
-        # You can add or remove entries from the arrays of each parameter to customize which builds you want to run.
-        # See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow
         target:
           [
             { platform: linux, arch: x86_64, os: ubuntu-22.04 },
@@ -35,26 +36,21 @@ jobs:
 
     runs-on: ${{ matrix.target.os }}
     steps:
-      # Clone this repository
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: true
 
-      # Add linux x86_32 toolchain
       - name: Install multilib support
         if: ${{ matrix.target.platform == 'linux' && matrix.target.arch == 'x86_32' }}
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
 
-      # Setup dependencies
       - name: Setup godot-cpp
         uses: ./godot-cpp/.github/actions/setup-godot-cpp
         with:
           platform: ${{ matrix.target.platform }}
           em-version: 3.1.62
-
-      # Build GDExtension (with caches)
 
       - name: Restore .scons_cache
         uses: ./godot-cpp/.github/actions/godot-cache-restore
@@ -62,7 +58,7 @@ jobs:
           scons-cache: ${{ github.workspace }}/.scons-cache/
           cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
 
-      - name: Build GDExtension Debug Build
+      - name: Build GDExtension
         shell: sh
         env:
           SCONS_CACHE: ${{ github.workspace }}/.scons-cache/
@@ -75,23 +71,21 @@ jobs:
           scons-cache: ${{ github.workspace }}/.scons-cache/
           cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
 
-      # Clean up compilation files
       - name: Windows - Delete compilation files
         if: ${{ matrix.target.platform == 'windows' }}
         shell: pwsh
         run: |
           Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force
 
-      # Upload the build
+      # Upload just the compiled binaries — the addon structure is assembled in the release job
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: godot-cpp-template-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
+          name: tag_system-${{ matrix.target.platform }}-${{ matrix.target.arch }}-${{ matrix.float-precision }}-${{ matrix.target-type }}
           path: |
             ${{ github.workspace }}/bin/**
 
-  # Merges all the build artifacts together into a single godot-cpp-template artifact.
-  # If you comment out this step, all the builds will be uploaded individually.
+  # Merges all platform bin artifacts into one
   merge:
     runs-on: ubuntu-22.04
     needs: build
@@ -99,6 +93,42 @@ jobs:
       - name: Merge Artifacts
         uses: actions/upload-artifact/merge@v4
         with:
-          name: godot-cpp-template
-          pattern: godot-cpp-template-*
+          name: tag_system_bins
+          pattern: tag_system-*
           delete-merged: true
+
+  # Creates the addon zip and GitHub Release on tag pushes
+  release:
+    runs-on: ubuntu-22.04
+    needs: merge
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Download the merged bins into the correct addon bin folder
+      - name: Download merged bins
+        uses: actions/download-artifact@v4
+        with:
+          name: tag_system_bins
+          path: demo/addons/tag_system/bin/
+
+      # Zip the addon folder — excludes include/ since C++ headers
+      # are not needed by end users of the GDExtension plugin
+      - name: Create addon zip
+        run: |
+          cd demo
+          zip -r ../tag_system_addon.zip addons/tag_system/ --exclude "*/include/*"
+
+      - name: Upload addon zip as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tag_system_addon
+          path: tag_system_addon.zip
+
+      # Only create a GitHub Release when triggered by a version tag push
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tag_system_addon.zip
+          generate_release_notes: true
