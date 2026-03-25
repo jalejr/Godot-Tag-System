@@ -1,5 +1,7 @@
 #include "tag_watcher.h"
 
+#include <algorithm>
+
 void TagWatcher::watch(const StringName& p_tag_name, const Callable& p_callback, TagManager* p_tag_manager)
 {
     uint32_t index = p_tag_manager->get_tag_index(p_tag_name);
